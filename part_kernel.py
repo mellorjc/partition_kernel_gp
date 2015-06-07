@@ -8,7 +8,9 @@ from scipy.sparse.linalg import LinearOperator, cg
 from random import randint
 
 class FastKernel:
-    def __init__(self, X, m=500, h=3, distance=None, sigma=0.1, eps=0.001):
+    def __init__(self, X, m=500, h=3, distance=None, sigma=0.1, eps=0.001, maxiter=20):
+        self.maxiter = maxiter
+        self.v = None
         self.m = m
         self.h = h
         self.sigma = sigma
@@ -152,7 +154,8 @@ class FastKernel:
     def predict_mean(self, X2, X, y):
         A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) - self.sigma*x)
         M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
-        v, info = cg(A, y, M=M, maxiter=10)
+        if self.v is None:
+            self.v, info = cg(A, y, M=M, maxiter=10)
         k = self.K2(X2, X)
         return k.dot(v)
     
@@ -163,6 +166,6 @@ class FastKernel:
             A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) - self.sigma*x)
             M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
             k_star = self.K2(X2[i, :], X)
-            tmp = cg(A, k_star.T, M=M, maxiter=10)
+            tmp = cg(A, k_star.T, M=M, maxiter=self.maxiter)
             vs[i] = v - k_star.dot(tmp)
         return vs
