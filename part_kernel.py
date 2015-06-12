@@ -236,7 +236,7 @@ class FastKernel:
         A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) - self.sigma*x)
         M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
         if self.v is None:
-            self.v, info = cg(A, y, M=M, maxiter=40, tol=self.eps, allback=resid_callback)
+            self.v, info = cg(A, y, M=M, maxiter=40, tol=self.eps, callback=resid_callback)
         self.k = self.K2(X2, X)
         return self.k.dot(self.v)
     
