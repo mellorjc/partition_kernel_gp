@@ -10,6 +10,7 @@ from random import randint
 from multiprocessing import Pool, Array
 import ctypes
 from numpy.ctypeslib import as_array
+from sklearn.neighbors import KNeighborsClassifier as KClass
 
 
 def para_func(arg):
@@ -18,9 +19,12 @@ def para_func(arg):
     # calculate distances
     X_mask = dim_mask.reshape((1, dim_mask.size))*X
     c_mask = dim_mask.reshape((1, dim_mask.size))*centers
-    dists = pairwise_distances(X_mask, c_mask, metric=d)
+    #dists = pairwise_distances(X_mask, c_mask, metric=d)
     #c[:, num] = argmin(dists, axis=1)
-    return argmin(dists, axis=1)
+    mod = KClass(1, metric=d)
+    mod.fit(c_mask, range(c_mask.shape[0]))
+    #return argmin(dists, axis=1)
+    return mod.predict(X_mask)
 
 
 def para_func2(arg):
@@ -30,13 +34,17 @@ def para_func2(arg):
     X2_mask = dim_mask.reshape((1, dim_mask.size))*X2
     c_mask = dim_mask.reshape((1, dim_mask.size))*centers
     # find the distance to the centers for matrix X
-    dists = pairwise_distances(X_mask, c_mask, metric=d)
+    #dists = pairwise_distances(X_mask, c_mask, metric=d)
     # find the center which is closest for each example in X
-    c = argmin(dists, axis=1)
+    #c = argmin(dists, axis=1)
     # find the distance to the centers for matrix X2
-    dists = pairwise_distances(X2_mask, c_mask, metric=d)
+    #dists = pairwise_distances(X2_mask, c_mask, metric=d)
     # find the center which is closest for each example in X2
-    c2 = argmin(dists, axis=1)
+    #c2 = argmin(dists, axis=1)
+    mod = KClass(1, metric=d)
+    mod.fit(c_mask, range(c_mask.shape[0]))
+    c = mod.predict(X_mask)
+    c2 = mod.predict(X2_mask)
     return c, c2
 
 
@@ -52,7 +60,7 @@ class FastKernel:
         self._K = None
         self.eps = eps
         if distance is None:
-            self.d = euclidean
+            self.d = 'minkowski'
         else:
             self.d = distance
         self.selected = False
