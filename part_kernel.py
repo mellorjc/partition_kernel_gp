@@ -241,7 +241,7 @@ class FastKernel:
         return x
 
     def predict_mean(self, X2, X, y):
-        A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) - self.sigma*x)
+        A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) + self.sigma*x)
         M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
         if self.v is None:
             self.v, info = cg(A, y, M=M, maxiter=40, tol=self.eps, callback=resid_callback)
@@ -252,7 +252,7 @@ class FastKernel:
         vs = zeros(X2.shape[0])
         for i in range(X2.shape[0]):
             v = self.K2(X2[i, :], X2[i, :])
-            A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) - self.sigma*x)
+            A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) + self.sigma*x)
             M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
             k_star = self.K2(X2[i, :], X)
             tmp = cg(A, k_star.T, M=M, maxiter=40, tol=self.eps, callback=resid_callback)
