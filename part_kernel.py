@@ -25,14 +25,10 @@ _sharedX2 = None
 def para_func(arg):
     num, shape, metric, cnum = arg
     X = _sharedX
-
     centers = choice(X.shape[0], cnum, False)
     mod = KClass(1, metric=metric)
     mod.fit(X[centers, :], range(centers.size))
     dist, m = mod.kneighbors(X, return_distance=True)
-
-    vals1 = binom.rvs(1, 1.-dist)
-    m[vals1 == 0] = -1
     return m
 
 
@@ -47,12 +43,7 @@ def para_func2(arg):
     distb1, mb1 = mod.kneighbors(X2, return_distance=True)
 
     mall = ma1
-    vals1 = binom.rvs(1, 1.-dista1)
-    mall[vals1 == 0] = -1
-
     mall2 = mb1
-    vals1 = binom.rvs(1, 1.-distb1)
-    mall2[vals1 == 0] = -1
 
     return mall2, mall
 
@@ -76,12 +67,11 @@ def load_model(model_folder):
     return model
 
 class FastKernel:
-    def __init__(self, X, y, split, m=400, h=8, distance=None, sigma=0.01, eps=0.05, num_proc=8):
-        self.cnum = 500
+    def __init__(self, X, y, m=200, h=8, distance='euclidean', sigma=0.01, eps=0.05, num_proc=8):
+        self.cnum = 3*X.shape[0]//4
         self.d = distance
         self.X = X
         self.y = y
-        self.split = split
         self.num_proc = num_proc
         self.v = None
         self.m = m
@@ -119,7 +109,6 @@ class FastKernel:
         if self.cs is None:
             pool = Pool(self.num_proc, maxtasksperchild=50, initializer=initShared, initargs=[share])
             cs = pool.imap(para_func, ((i, X.shape, self.d, self.cnum) for i in xrange(self.m)), 10)
-            print(pool._cache)
             self.cs = list(cs)
             pool.close()
             pool.join()
@@ -148,7 +137,7 @@ class FastKernel:
         for c, c2 in cs:
             for cls in unique(c):
                 if cls > -1:
-                    res[c == cls] = y[c2 == cls].sum()
+                    res[c.flatten() == cls] += y[c2.flatten() == cls].sum()
         res /= self.m
         pool.close()
         pool.join()
