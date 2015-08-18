@@ -1,9 +1,9 @@
 import inspect
-from numpy import ones, zeros, where, argmin, unique
+from numpy import ones, zeros, where, argmin, unique, array
 from numpy import logical_and, logical_or, arange, sqrt
-from numpy import maximum
+from numpy import maximum, pi, log
 from numpy.random import choice
-from numpy.linalg import norm
+from numpy.linalg import norm, det
 from scipy.stats import binom, uniform
 from sklearn.metrics.pairwise import pairwise_distances
 from scipy.spatial.distance import euclidean
@@ -144,17 +144,33 @@ class FastKernel:
         return res
 
     def K2(self, X, X2):
-        res = zeros((X.shape[0], X2.shape[0]))
-        if len(X.shape) == 1:
+        #if X.ndim == 0:
+        #    X = X.reshape((1, 1))
+        #if X2.ndim == 0:
+        #    X2 = X2.reshape((1, 1))
+        if X.ndim == 1:
             X = X.reshape((X.shape[0], 1))
-        if len(X2.shape) == 1:
+        if X2.ndim == 1:
             X2 = X2.reshape((X2.shape[0], 1))
-        share_base = Array(ctypes.c_double, X.shape[0]*X.shape[1], lock=False)
+        if X.ndim == 0:
+            Xsh = 1
+            Xsh2 = 1
+        else:
+            Xsh = X.shape[0]
+            Xsh2 = X.shape[1]
+        if X2.ndim == 0:
+            X2sh = 1
+            X2sh2 = 1
+        else:
+            X2sh = X2.shape[0]
+            X2sh2 = X2.shape[1]
+        res = zeros((Xsh, X2sh))
+        share_base = Array(ctypes.c_double, Xsh*Xsh2, lock=False)
         share = as_array(share_base)
-        share = share.reshape(X.shape)
+        share = share.reshape((Xsh, Xsh2))
         share[:, :] = X
 
-        share2_base = Array(ctypes.c_double, X2.shape[0]*X2.shape[1], lock=False)
+        share2_base = Array(ctypes.c_double, X2sh*X2sh2, lock=False)
         share2 = as_array(share2_base)
         share2 = share2.reshape(X2.shape)
         share2[:, :] = X2
@@ -168,6 +184,8 @@ class FastKernel:
         res /= self.m
         pool.close()
         pool.join()
+        if X.ndim == 0:
+            res = res.flatten()
         return res
 
     def Ky(self, X, y):
@@ -184,7 +202,8 @@ class FastKernel:
                 ind = where(c[:, i] == j)[0]
                 for k in ind:
                     res[k] += (1.-a)*y[k] + a*y[ind].sum()
-            res[c[:, i] == -1] += y[c[:, i] == -1] # JOE remove if not doing semi
+            if (c[:, i] == -1).any():
+                res[c[:, i] == -1] += y[c[:, i] == -1] # JOE remove if not doing semi
         res /= float(self.m)
         return res
 
@@ -204,12 +223,15 @@ class FastKernel:
         res = (1./self.sigma)*y - res
         return res
 
-    def predict_mean(self, X2, X, y):
-        self.cs = None
+    def train(self, X, y):
         if self.v is None:
             A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) + self.sigma*x)
             M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
             self.v, info = cg(A, y, M=M, maxiter=40, tol=self.eps, callback=resid_callback)
+
+    def predict_mean(self, X2, X, y):
+        self.train(X, y)
+        self.cs = None
         res = self.K2y(X2, X, self.v)
         return res
 
@@ -217,14 +239,24 @@ class FastKernel:
         vs = zeros(X2.shape[0])
         for i in range(X2.shape[0]):
             self.cs = None
-            v = self.K2(X2[i, :], X2[i, :])
+            # v = self.K2(X2[i, :], X2[i, :])
+            v = 1. # by definition of partition kernel K(x, x) = 1
             A = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.Ky(X, x) + self.sigma*x)
             M = LinearOperator((X.shape[0], X.shape[0]), lambda x: self.B(X, x))
             self.cs = None
-            k_star = self.K2(X2[i, :], X)
-            tmp = cg(A, k_star.T, M=M, maxiter=40, tol=self.eps)
+            if X2.ndim == 1:
+                k_star = self.K2(X2[i], X)
+            else:
+                k_star = self.K2(X2[i, :], X)
+            tmp, info = cg(A, k_star.T, M=M, maxiter=40, tol=self.eps)
             vs[i] = v - k_star.dot(tmp)
         return vs
+
+    def likelihood(self, X, y):
+        self.train(X, y)
+        A = self.K2(X, X)
+        res = -.5*y.dot(self.v)-y.shape[0]*log(2.*pi)-.5*log(det(A))
+        return res
 
 
 def resid_callback(xk):
